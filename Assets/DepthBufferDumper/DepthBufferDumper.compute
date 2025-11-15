@@ -1,0 +1,47 @@
+#pragma kernel CSMain
+
+#include "UnityCG.cginc"
+
+Texture2D<float4> _CameraDepthTexture;
+Texture2D<float4> _CameraDepthNormalsTexture;
+uint _Width;
+uint _Height;
+float4x4 _CameraToWorldMatrix;
+float4x4 _ProjToWorldMatrix;
+
+RWTexture2D<float> _ResultDepth;
+RWTexture2D<float4> _ResultNormals;
+RWTexture2D<float4> _ResultPos;
+
+[numthreads(8, 8, 1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+	uint2 pixelCoord = id.xy;
+	if (pixelCoord.x >= _Width || pixelCoord.y >= _Height)
+		return;
+
+	float depth = _CameraDepthTexture[pixelCoord.xy];
+
+	float4 cameraDepthAndNormalsSample = _CameraDepthNormalsTexture[pixelCoord.xy];
+	float linearDepth; // 16-bit quality
+	float3 normal;
+	DecodeDepthNormal(cameraDepthAndNormalsSample, linearDepth, normal);
+
+	normal = mul((float3x3)_CameraToWorldMatrix, normal);
+	normal = 0.5f * normal + 0.5f;
+
+	float4 posNDC;
+	posNDC.xy = ((float2)pixelCoord + 0.5f) / float2(_Width, _Height);
+	posNDC.xy = 2.0f*posNDC.xy - 1.0f;
+#if defined(UNITY_REVERSED_Z)
+	posNDC.z = 1.0f - depth;
+#endif
+	posNDC.z = 2.0f*posNDC.z - 1.0f;
+	posNDC.w = 1.0f;
+	float4 posWorld = mul(_ProjToWorldMatrix, posNDC);
+	posWorld /= posWorld.w;
+
+	_ResultDepth[pixelCoord] = Linear01Depth(depth); // linearDepth;
+	_ResultNormals[pixelCoord] = float4(normal, 1.0f);
+	_ResultPos[pixelCoord] = float4(posWorld.xyz, 1.0f);
+}

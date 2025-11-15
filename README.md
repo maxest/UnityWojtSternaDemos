@@ -1,2 +1,2 @@
 # UnityWojtSternaDemos
-A bag of random demo apps/scripts written in Unity.
+A bag of random demo apps/scripts written in Unity
